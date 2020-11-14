@@ -10,51 +10,62 @@ const client_future = new Discord.Client();
 
 var eventEmitter = new events.EventEmitter();
 
-const conversation_tracker = new NodeCache();
 const pending_messages = new NodeCache();
 
+function isValidMessage(m)
+{
+    return !m.author.bot && m.type === "DEFAULT";
+}
+
 client_future.on("message", function(message) {
-    if (message.author.bot) return;
+    if (!isValidMessage(message)) {
+        return;
+    }
     if (message.channel.type == "dm") {
         var userId = message.author.id;
         var content = message.content;
-        if (isNewConversation(userId)) {
-            message.author.send("Hi. Is this your first time?");
-            conversation_tracker.set(userId, "ready");
-        }
-        if (isReady(userId)) {
-            conversation_tracker.set(userId, "inProgress");
+        if (!pending_messages.has(userId))
+        {
             pending_messages.set(userId, content);
             message.author.send("When should I send that message?");
-            return;
-        } else if (isInProgress(userId)) {
-            var scheduledDate = chrono.parseDate(content);
-            if (scheduledDate instanceof Date 
-                && !isNaN(scheduledDate)
-                && scheduledDate > new Date() ) {
-                eventEmitter.emit("myevent", pending_messages.get(userId), userId, scheduledDate);
-                message.author.send("Cool. Will do!");
-                message.author.send(scheduledDate.toLocaleString() + " it is then.");
-                conversation_tracker.set(userId, "ready");
-                return;
-            } else {
-                message.author.send("Sorry, try again maybe?");
-                return;
-            }
+            getTimeResponse(message.channel, userId);
         }
     }
 })
 
-function isNewConversation(id) {
-    return !conversation_tracker.has(id);
+async function getTimeResponse(channel, userId)
+{
+    var timeSuccess = true;
+    while (timeSuccess)
+    {
+        await channel.awaitMessages(isValidMessage, { time: 300000, max: 1, errors: ['time']})
+            .then(collected => collected.each(timeMessage => arrangeMessage(userId, timeMessage)))
+            .catch(collected => timeSuccess = false);
+        if (!pending_messages.has(userId))
+        {
+            return;
+        }
+    }
+    if (!timeSuccess)
+    {
+        giveUpOnMessage(userId)
+    }
 }
 
-function isReady(id) {
-    return conversation_tracker.get(id) === "ready";
-}
-
-function isInProgress(id) {
-    return conversation_tracker.get(id) === "inProgress";
+function arrangeMessage(userId, timeMessage) {
+    var scheduledDate = chrono.parseDate(timeMessage.content);
+    if (scheduledDate instanceof Date 
+            && !isNaN(scheduledDate)
+            && scheduledDate > new Date() ) 
+    {
+        eventEmitter.emit("myevent", pending_messages.get(userId), userId, scheduledDate);
+        timeMessage.author.send("Cool. Will do!");
+        timeMessage.author.send(scheduledDate.toLocaleString() + " it is then.");
+        pending_messages.del(userId);
+        return;
+    } else {
+        timeMessage.author.send("Sorry, try again maybe?");
+    }
 }
 
 async function sendMessageFromPast(message, userid, scheduledDate) {
@@ -63,6 +74,13 @@ async function sendMessageFromPast(message, userid, scheduledDate) {
         user.send(message);
         job.cancel();
     })
+}
+
+async function giveUpOnMessage(userId) {
+    const user = await client_future.users.fetch(userId);
+    user.send("dw, come back to me when you're ready");
+    pending_messages.del(userId);
+    return;
 }
 
 eventEmitter.on("myevent", sendMessageFromPast);
