@@ -122,14 +122,12 @@ async function scheduleFromDatabase() {
             }
         }
     });
-    if (isNewJob("nextLoad"))
-    {
-        var nextLoadTime = new Date();
-        nextLoadTime.setHours(nextLoadTime.getHours() + 1);
-        schedule.scheduleJob("nextLoad", nextLoadTime, () => {
-            scheduleFromDatabase();
-        });
-    }
+
+    var nextLoadTime = new Date();
+    nextLoadTime.setHours(nextLoadTime.getHours() + 1);
+    schedule.scheduleJob("nextLoad", nextLoadTime, () => {
+        scheduleFromDatabase();
+    });
 }
 
 function isNewJob(jobId) {
