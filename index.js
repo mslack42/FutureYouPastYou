@@ -7,6 +7,16 @@ const chrono = require("chrono-node");
 const datastore = require("./datastore");
 const _ = require('lodash');
 
+process.on('uncaughtException', err => {
+    console.log(`Uncaught Exception: ${err.message}`)
+    process.exit(1)
+  });
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.log('Unhandled rejection at ', promise, `reason: ${err.message}`)
+    process.exit(1)
+  });
+
 const client_past = new Discord.Client();
 const client_future = new Discord.Client();
 
